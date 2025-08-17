@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>在线SVG编辑器</title>
+  <script src="https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/vue/3.5.17/vue.global.prod.js"></script>
+  <style>
+     * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #2c3e50; }
+    [v-cloak] { display: none; }
+    .container { max-width: min(1500px, 94vw); margin: 0 auto; padding: 20px; }
+    .main-content {display: grid;grid-template-columns: 5fr 4fr;gap: 20px;height: calc(100dvh - 40px);}
+    .editor-panel, .preview-panel { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); overflow: hidden; display: flex; flex-direction: column; }
+    .panel-header {padding: 10px 20px;background: #f8fafc;border-bottom: 1px solid #e2e8f0;display: flex;justify-content: space-between;align-items: center;}
+    .panel-title { font-size: 16px; font-weight: 600; color: #2d3748; }
+    .panel-body {flex: 1;padding: 10px;overflow: auto;}
+    .editor-wrapper {position: relative;height: calc(100% - 50px);}
+    .code-editor{ width: 100%; height: 100%; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; font-family: 'Consolas', 'Monaco', monospace; 
+      font-size: 14px; line-height: 1.5; resize: none; outline: none; transition: border-color 0.3s; word-break: break-all;}
+    .stats-bar {display: flex;gap: 16px;margin-bottom: 9px;padding: 6px 12px;background: #f7fafc;border-radius: 8px;}
+    .stat-item {display: flex;/* flex-direction: column; */align-items: center;}
+    .stat-label {font-size: 12px;color: #718096;/* margin: 4px; */margin-right: 7px;}
+    .stat-value {font-size: 17px;font-weight: 600;color: #2d3748;}
+    .button-group { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {padding: 6px 12px;border: none;border-radius: 6px;font-size: 14px;cursor: pointer;transition: all 0.3s;display: inline-flex;align-items: center;gap: 6px;}
+    .btn-primary { background: #4299e1; color: white; }
+    .btn-primary:hover { background: #3182ce; transform: translateY(-1px); }
+    .btn-secondary { background: #e2e8f0; color: #4a5568; }
+    .btn-secondary:hover { background: #cbd5e0; }
+    .btn-success { background: #48bb78; color: white; }
+    .btn-success:hover { background: #38a169; }
+    .btn-warning { background: #ed8936; color: white; }
+    .btn-warning:hover { background: #dd6b20; }
+    .preview-container {width: 100%;height: 100%;display: flex;align-items: center;justify-content: center;background: #f7fafc;border-radius: 8px;height: calc(100% - 60px);position: relative;overflow: hidden;}
+    .preview-wrapper { position: relative; cursor: grab; }
+    .preview-wrapper:active { cursor: grabbing; }
+    .preview-wrapper svg { display: block; max-width: none; width: 100%;  border: 1px dashed #e3e3e3;}
+    .zoom-controls { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; background: white; padding: 8px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .zoom-btn { width: 36px; height: 36px; border: none; background: #4299e1; color: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s; font-size: 22px;}
+    .zoom-btn:hover { background: #3182ce; transform: scale(1.1); }
+    .zoom-level { text-align: center; font-size: 12px; color: #4a5568; font-weight: 600; }
+    .export-section {margin-top: 0;height: 100%;}
+    .export-tabs { display: flex; gap: 10px; margin-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
+    .export-tab { padding: 8px 16px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 14px; color: #718096; transition: all 0.3s; }
+    .export-tab.active { color: #4299e1; border-bottom-color: #4299e1; }
+    .export-tab:hover { color: #4299e1; }
+    .export-content { padding: 16px; background: #f7fafc; border-radius: 8px; }
+    .export-card { margin-bottom: 16px; }
+    .export-title { font-size: 14px; font-weight: 600; color: #2d3748; margin-bottom: 8px; }
+    .export-code {font-family: 'Consolas', 'Monaco', monospace;font-size: 12px;color: #4a5568;background: white;padding: 8px;border-radius: 4px;word-break: break-all;max-height: 120px;overflow-y: auto;}
+    .export-options { display: flex; gap: 10px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+    .input-group { display: flex; align-items: center; gap: 8px; }
+    .input-group label { font-size: 14px; color: #4a5568; }
+    input, select { padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; width: 100px; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #2d3748; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 1000; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    ::-webkit-scrollbar{width: 8px;height: 8px}::-webkit-scrollbar-thumb{background-color: #ddd;border-radius: 6px}
+    @media (max-width: 768px) { .main-content { grid-template-columns: 1fr; height: auto; }
+      .editor-panel, .preview-panel { min-height: 400px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app" v-cloak>
+    <div class="container">
+      <div class="main-content">
+        <input type="file" id="fileInput" accept="image/svg+xml" style="display: none;" @change="handleFiles">
+        <!-- 左侧编辑面板 -->
+        <div class="editor-panel">
+          <div class="panel-header">
+            <h2 class="panel-title">💻 SVG代码编辑器</h2>
+            <div class="button-group">
+              <button class="btn btn-primary" @click="formatSVG()">格式化</button>
+              <button class="btn btn-primary" @click="() => { compressSVG();formatSVG() }">压缩&格式化</button>
+              <button class="btn btn-secondary" v-show="svgoLoaded" @click="compressSVG">压缩</button>
+            </div>
+          </div>
+
+          <div class="panel-body">
+            <div class="stats-bar">
+              <div class="stat-item">
+                <span class="stat-label">原始大小</span>
+                <span class="stat-value">{{ formatBytes(originalSize) }}</span>
+              </div>
+              <div class="stat-item" v-if="svgoLoaded">
+                <span class="stat-label">压缩后</span>
+                <span class="stat-value">{{ formatBytes(compressedSize) }}</span>
+              </div>
+              <div class="stat-item" v-if="svgoLoaded">
+                <span class="stat-label">压缩率</span>
+                <span class="stat-value">{{ compressionRatio }}%</span>
+              </div>
+            </div>
+
+            <div class="editor-wrapper">
+              <!-- <textarea class="code-editor" v-model="svgCode" @input="updatePreview"
+                placeholder="在此输入SVG代码..." spellcheck="false"></textarea> -->
+              <div class="code-editor" id="code-editor"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧预览面板 -->
+        <div class="preview-panel">
+          <div class="panel-header">
+            <h2 class="panel-title">👁️ SVG预览</h2>
+            <div class="button-group">
+              <button class="btn btn-secondary" @click="uploadClick">上传</button>
+              <button class="btn btn-secondary" @click="copyToClipboard(svgCode)">复制SVG</button>
+              <button class="btn btn-success" @click="downloadSVG">下载SVG</button>
+            </div>
+          </div>
+
+          <div class="panel-body">
+
+            <div class="export-section">
+              <div class="export-tabs">
+                <button class="export-tab" :class="{ active: activeTab === 'preview' }" @click="activeTab = 'preview'">
+                  预览
+                </button>
+                <button class="export-tab" :class="{ active: activeTab === 'image' }" @click="activeTab = 'image'">
+                  导出图片
+                </button>
+                <button class="export-tab" :class="{ active: activeTab === 'data' }" @click="activeTab = 'data'">
+                  DataURI
+                </button>
+              </div>
+
+              <div class="preview-container" @wheel="handleWheel" ref="previewContainer" v-show="activeTab === 'preview'">
+                <div class="preview-wrapper" ref="previewWrapper" id="preview-svg"  @mousedown="startPan" @mousemove="doPan" @mouseup="endPan"
+                  :style="{ transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)` }" v-html="previewHTML">
+                </div>
+
+                <div class="zoom-controls">
+                  <button class="zoom-btn" @click="zoomIn">+</button>
+                  <div class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</div>
+                  <button class="zoom-btn" @click="zoomOut">-</button>
+                  <button class="zoom-btn" @click="resetZoom">✣</button>
+                </div>
+              </div>
+
+              <div class="export-content" v-show="activeTab === 'image'">
+                <div class="export-card">
+                  <h3 class="export-title">导出为PNG</h3>
+                  <div class="export-options">
+                    <div class="input-group">
+                      <label>宽度:</label>
+                      <input type="number" v-model="pngWidth" min="1" max="5000">
+                      <span>px</span>
+                    </div>
+                    <button class="btn btn-warning" @click="exportAsPNG">
+                      🖼️ 导出PNG
+                    </button>
+                  </div>
+                </div>
+
+                <div class="export-card">
+                  <h3 class="export-title">导出为JPEG</h3>
+                  <div class="export-options">
+                    <div class="input-group">
+                      <label>宽度:</label>
+                      <input type="number" v-model="jpegWidth" min="1" max="5000">
+                      <span>px</span>
+                    </div>
+                    <button class="btn btn-warning" @click="exportAsJPEG">
+                      🖼️ 导出JPEG
+                    </button>
+                  </div>
+                </div>
+                <div class="export-card">
+                  <h3 class="export-title">导出为ICO</h3>
+                  <div class="export-options">
+                    <div class="input-group">
+                      <label>宽度:</label>
+                      <select v-model="icoWidth">
+                        <option :value="16 * x" v-for="x in [1, 2, 3, 4, 8, 16]" :key="x">{{ 16 * x }}</option>
+                      </select>
+                      <span>px</span>
+                    </div>
+                    <button class="btn btn-warning" @click="exportAsICO">
+                      🖼️ 导出ICO
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="export-content" v-show="activeTab === 'data'">
+                <div class="export-card">
+                  <h3 class="export-title">Minified Data URI</h3>
+                  <div class="export-code">{{ minifiedDataURI }}</div>
+                  <button class="btn btn-secondary" @click="copyToClipboard(minifiedDataURI)" style="margin-top: 8px;">
+                    📋 复制
+                  </button>
+                </div>
+
+                <div class="export-card">
+                  <h3 class="export-title">Base64</h3>
+                  <div class="export-code">{{ base64Data }}</div>
+                  <button class="btn btn-secondary" @click="copyToClipboard(base64Data)" style="margin-top: 8px;">
+                    📋 复制
+                  </button>
+                </div>
+
+                <div class="export-card">
+                  <h3 class="export-title">encodeURIComponent</h3>
+                  <div class="export-code">{{ encodedURIComponent }}</div>
+                  <button class="btn btn-secondary" @click="copyToClipboard(encodedURIComponent)"
+                    style="margin-top: 8px;">
+                    📋 复制
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" :class="{ show: showToast }">
+      {{ toastMessage }}
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.43.2/ace.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.43.2/ext-language_tools.min.js"></script>
+
+  <script type="module">
+    async function loadSvgo() {
+      try {
+        return (await import('https://registry.npmmirror.com/svgo/3.3.2/files/dist/svgo.browser.js'));
+      } catch (e) { return (await import('https://unpkg.com/svgo@3.3.2/dist/svgo.browser.js')) }
+    }
+    loadSvgo().then(({ optimize }) => {
+      if (optimize) {
+        window.optimize = optimize;
+        vueApp.svgoLoaded = true;
+        vueApp.updatePreview();
+      }
+    }).catch((e) => console.error('SVGO initialization failed:', e));
+  </script>
+
+  <script>
+    const vueApp = Vue.createApp({
+      data() {
+        return {
+          svgCode: `<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="100" cy="100" r="80" fill="#4299e1" />
+    <rect x="50" y="50" width="100" height="100" fill="#48bb78" opacity="0.7" />
+    <polygon points="100,30 130,70 70,70" fill="#ed8936" />
+</svg>`,
+          originalSize: 0,
+          compressedSize: 0,
+          showToast: false,
+          toastMessage: '',
+          previewHTML: '',
+          activeTab: 'preview',
+          pngWidth: 400,
+          jpegWidth: 400,
+          icoWidth: 128,
+          zoomLevel: 1,
+          panX: 0,
+          panY: 0,
+          isPanning: false,
+          startX: 0,
+          startY: 0,
+          startPanX: 0,
+          startPanY: 0,
+          svgoLoaded: false,
+          editor: null
+        }
+      },
+      computed: {
+        compressionRatio() {
+          if (this.originalSize === 0) return 0;
+          const ratio = ((this.compressedSize) / this.originalSize * 100).toFixed(1);
+          return ratio;
+        },
+        minifiedDataURI() {
+          if (!this.svgCode.trim() || !this.svgoLoaded) return '';
+          const compressed = this.compressSVGCode(this.svgCode);
+          return `data:image/svg+xml,${encodeURIComponent(compressed)}`;
+        },
+        base64Data() {
+          if (!this.svgCode.trim()) return '';
+          return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(this.svgCode)));
+        },
+        encodedURIComponent() {
+          if (!this.svgCode.trim()) return '';
+          return 'data:image/svg+xml,' + encodeURIComponent(this.svgCode);
+        }
+      },
+      watch: {
+        svgCode() {
+          this.updatePreview();
+        }
+      },
+      mounted() {
+        this.initEditor()
+        this.initEvents()
+        this.updatePreview();
+      },
+      methods: {
+        initEditor() { 
+          const editor = ace.edit('code-editor', {
+            theme: 'ace/theme/chrome', // 主题
+            mode: 'ace/mode/svg', // 代码匹配模式
+            tabSize: 2, //标签大小
+            fontSize: 14, //设置字号
+            wrap: true, // 用户输入的sql语句，自动换行
+            enableSnippets: true, // 启用代码段
+            showLineNumbers: true, // 显示行号
+            enableLiveAutocompletion: true, // 启用实时自动完成功能 （比如：智能代码提示）
+            enableBasicAutocompletion: true, // 启用基本自动完成功能
+            keyboardHandler: 'ace/keyboard/vscode',
+          });
+          editor.setValue(this.svgCode);
+          // ace.require('ace/ext/language_tools');
+          editor.session.on('change', () => {
+            console.log('editor change...');
+            this.svgCode = editor.getValue();
+          });
+          this.editor = editor;
+        },
+        setEditorValue(code) {
+          this.svgCode = code;
+          this.editor.setValue(this.svgCode);
+        },
+        uploadClick() {
+          document.getElementById('fileInput').click()
+        },
+        initEvents() {
+          document.body.addEventListener('dragover', (e) => e.preventDefault());
+          document.body.addEventListener('drop', (e) => { e.preventDefault(); this.handleFiles(e); });
+        },
+        handleFiles(e) {
+          const files = e.target.files || e.dataTransfer.files;
+          if (!files || files.length === 0) return;
+          const file = files[0];
+          if (!file.type.includes('xml') && !file.type.includes('svg')) {
+              return;
+          }
+          const reader = new FileReader();
+          reader.onload = (e) => this.setEditorValue(e.target.result);
+          reader.readAsText(file);
+        },
+        updatePreview() {
+          this.originalSize = new Blob([this.svgCode]).size;
+          if (this.svgoLoaded) this.compressedSize = new Blob([this.compressSVGCode(this.svgCode)]).size;
+
+          // 安全地显示SVG预览
+          try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(this.svgCode, 'image/svg+xml');
+            const svgElement = doc.querySelector('svg');
+            if (svgElement) {
+              this.previewHTML = this.svgCode;
+            } else {
+              this.previewHTML = '<div style="color: #e53e3e;">无效的SVG代码</div>';
+            }
+          } catch (e) {
+            this.previewHTML = '<div style="color: #e53e3e;">解析SVG时出错</div>';
+          }
+        },
+        handleWheel(event) {
+          event.preventDefault();
+
+          const delta = event.deltaY > 0 ? -0.1 : 0.1;
+          const newZoom = Math.max(0.1, Math.min(5, this.zoomLevel + delta));
+
+          // 计算鼠标位置相对于容器的百分比
+          const container = this.$refs.previewContainer;
+          const rect = container.getBoundingClientRect();
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+
+          // 计算相对于SVG的位置
+          const svgX = (mouseX - rect.width / 2 - this.panX) / this.zoomLevel;
+          const svgY = (mouseY - rect.height / 2 - this.panY) / this.zoomLevel;
+
+          // 更新缩放级别
+          this.zoomLevel = newZoom;
+
+          // 调整平移以保持鼠标位置下的点不变
+          this.panX = mouseX - rect.width / 2 - svgX * this.zoomLevel;
+          this.panY = mouseY - rect.height / 2 - svgY * this.zoomLevel;
+        },
+        startPan(event) {
+          if (event.button === 0 && event.target.closest('#preview-svg')) { // 左键
+            this.isPanning = true;
+            this.startX = event.clientX;
+            this.startY = event.clientY;
+            this.startPanX = this.panX;
+            this.startPanY = this.panY;
+          }
+        },
+        doPan(event) {
+          if (this.isPanning) {
+            const deltaX = event.clientX - this.startX;
+            const deltaY = event.clientY - this.startY;
+            this.panX = this.startPanX + deltaX;
+            this.panY = this.startPanY + deltaY;
+          }
+        },
+        endPan() {
+          this.isPanning = false;
+        },
+        zoomIn() {
+          this.zoomLevel = Math.min(5, this.zoomLevel + 0.2);
+        },
+        zoomOut() {
+          this.zoomLevel = Math.max(0.1, this.zoomLevel - 0.2);
+        },
+        resetZoom() {
+          this.zoomLevel = 1;
+          this.panX = 0;
+          this.panY = 0;
+        },
+        formatSVG(tabSize = 2, delEmptyLine = true) {
+          if (!this.svgCode.trim()) return;
+          try {
+            let indentLevel = 0;
+            const indentChar = ' '.repeat(tabSize);
+            const resultLines = [];
+            let processedSvg = this.svgCode.trim()
+              .replace(/(\r\n|\n|\r)/g, '') // 移除所有换行符
+              .replace(/>\s*</g, '>\n<')    // 在 `>` 和 `<` 之间插入换行符，将标签分割到新行
+              .replace(/\s\s+/g, ' ')       // 将多个连续空格替换为单个空格
+
+            const lines = processedSvg.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+              let line = lines[i].trim();
+
+              if (line === '') {
+                if (!delEmptyLine) resultLines.push('')
+                continue;
+              }
+
+              const isClosingTag = line.startsWith('</'); // 如: </svg>
+              const isSelfClosingTag = line.endsWith('/>'); // 如: <path .../> (包括自闭合的 HTML 标签，如 <br/>)
+              // 传统的开标签：<tag ...>，但不是闭标签、自闭合标签、注释、XML声明、DOCTYPE
+              const isOpeningTag = line.startsWith('<') && !isClosingTag && !isSelfClosingTag &&
+                !line.startsWith('<!--') && !line.startsWith('<?xml') && !line.startsWith('<!DOCTYPE');
+              const isSelfContainedTextTag = (line.includes('<style') && line.includes('</style>'));
+              if (isClosingTag) {
+                indentLevel = Math.max(0, indentLevel - 1);
+              }
+
+              // 添加当前行及其缩进
+              resultLines.push(indentChar.repeat(indentLevel) + line);
+              if (isOpeningTag && !isSelfClosingTag && !isSelfContainedTextTag) {
+                indentLevel++;
+              }
+            }
+
+            this.setEditorValue(resultLines.filter(line => delEmptyLine ? line.trim() !== '' : true).join('\n'))
+          } catch (e) {
+            this.showToastMessage('格式化失败：无效的SVG代码', 'error');
+          }
+        },
+        compressSVG() {
+          if (!this.svgCode.trim()) return;
+
+          this.setEditorValue(this.compressSVGCode(this.svgCode))
+          this.showToastMessage('SVG代码已压缩');
+        },
+        compressSVGCode(code) {
+          try {
+            const result = optimize(code, {
+              // SVGO optimization options
+              plugins: [
+                {
+                  name: 'preset-default',
+                  params: {
+                    overrides: {
+                      removeViewBox: false,
+                    },
+                  },
+                },
+                'removeXMLProcInst',
+                'removeComments',
+                'removeMetadata',
+                'removeEditorsNSData',
+                'cleanupAttrs',
+                'mergeStyles',
+                'inlineStyles',
+                'minifyStyles',
+                'cleanupIds',
+                'removeRasterImages',
+                'removeUselessDefs',
+                'convertColors',
+                'removeUnknownsAndDefaults',
+                'removeNonInheritableGroupAttrs',
+                'removeUselessStrokeAndFill',
+                'cleanupEnableBackground',
+                'removeHiddenElems',
+                'removeEmptyText',
+                'removeEmptyAttrs',
+                'removeEmptyContainers',
+                'mergePaths',
+                'convertPathData',
+                'convertTransform',
+                'removeUnusedNS',
+                'sortAttrs',
+                'sortDefsChildren',
+                'removeTitle',
+                'removeDesc',
+              ]
+            });
+            
+            return result.data;
+          } catch (error) {
+            console.error('SVG optimization failed:', error);
+            return code;
+          }
+        },
+        downloadSVG() {
+          if (!this.svgCode.trim()) {
+            this.showToastMessage('没有可下载的SVG代码', 'error');
+            return;
+          }
+          download(new Blob([this.svgCode], { type: 'image/svg+xml' }), 'image.svg')
+          this.showToastMessage('SVG文件已下载');
+        },
+        exportAsPNG() {
+          if (!this.svgCode.trim()) return this.showToastMessage('没有可导出的SVG代码', 'error');
+          this.convertSVGToImage('png',  parseInt(this.pngWidth) || 400);
+        },
+        exportAsJPEG() {
+          if (!this.svgCode.trim()) return this.showToastMessage('没有可导出的SVG代码', 'error');
+          this.convertSVGToImage('jpeg',  parseInt(this.jpegWidth) || 400);
+        },
+        exportAsICO() {
+          if (!this.svgCode.trim()) return this.showToastMessage('没有可导出的SVG代码', 'error');
+          this.convertSVGToImage('ico', parseInt(this.icoWidth) || 128);
+        },
+        convertSVGToImage(format, width) {
+          try {
+            // 创建SVG blob
+            const svgBlob = new Blob([this.svgCode], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+
+            // 创建Image对象
+            const img = new Image();
+            img.onload = () => {
+              // 计算高度以保持宽高比
+              const height = (img.height / img.width) * width;
+
+              // 创建Canvas
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+
+              // 设置背景色（JPEG需要白色背景）
+              if (format === 'jpeg') {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, width, height);
+              }
+
+              // 绘制图像
+              ctx.drawImage(img, 0, 0, width, height);
+
+              // 导出图像
+              const dataURL = canvas.toDataURL(`image/${format}`, 0.92);
+              this.showToastMessage(`${format.toUpperCase()}文件已导出`);
+              if (format === 'ico') {
+                return this.downloadIco(dataURL, width);
+              }
+              download(dataURL, `image.${format}`)
+            };
+
+            img.onerror = () => {
+              URL.revokeObjectURL(url);
+              this.showToastMessage('导出失败：无法加载SVG', 'error');
+            };
+
+            img.src = url;
+          } catch (e) {
+            this.showToastMessage('导出失败：' + e.message, 'error');
+          }
+        },
+        downloadIco(dataURL, size) {
+          const base64Data = dataURL.substring(dataURL.indexOf(',') + 1);
+          const binaryString = atob(base64Data);
+          const pngData = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            pngData[i] = binaryString.charCodeAt(i);
+          }
+
+          const icoBuffer = new ArrayBuffer(22 + pngData.length);
+          const view = new DataView(icoBuffer);
+
+          // ICONDIR
+          view.setUint16(0, 0, true);
+          view.setUint16(2, 1, true);
+          view.setUint16(4, 1, true);
+
+          // ICONDIRENTRY
+          view.setUint8(6, size === 256 ? 0 : size);
+          view.setUint8(7, size === 256 ? 0 : size);
+          view.setUint8(8, 0);
+          view.setUint8(9, 0);
+          view.setUint16(10, 1, true);
+          view.setUint16(12, 32, true);
+          view.setUint32(14, pngData.length, true);
+          view.setUint32(18, 22, true);
+
+          const icoData = new Uint8Array(icoBuffer);
+          icoData.set(pngData, 22);
+          download(new Blob([icoData], { type: 'image/vnd.microsoft.icon' }), 'favicon.ico');
+        },
+        async copyToClipboard(text) {
+          try {
+            await navigator.clipboard.writeText(text);
+            this.showToastMessage('已复制到剪贴板');
+          } catch (err) {
+            // 降级方案
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            this.showToastMessage('已复制到剪贴板');
+          }
+        },
+        showToastMessage(message, type = 'success') {
+          this.toastMessage = message;
+          this.showToast = true;
+          setTimeout(() => {
+            this.showToast = false;
+          }, 3000);
+        },
+        formatBytes(bytes) {
+          if (bytes === 0) return '0 B';
+          const k = 1024;
+          const sizes = ['B', 'KB', 'MB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+      }
+    }).mount('#app');
+
+    function download(blob, name) {
+      const link = Object.assign(document.createElement('a'), {
+        download: name,
+        href: typeof blob === 'string' ? blob : URL.createObjectURL(blob)
+      });
+      link.click();
+      URL.revokeObjectURL(link.href);
+      setTimeout(() => link.remove(), 200);
+    }
+  </script>
+</body>
+
+</html>
